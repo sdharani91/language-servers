@@ -116,13 +116,13 @@ describe('Chat Session Service', () => {
             chatSessionService = new ChatSessionService(undefined)
 
             await assert.rejects(
-                chatSessionService.generateAssistantResponse(mockRequestParams),
+                chatSessionService.getChatResponse(mockRequestParams),
                 new Error('amazonQServiceManager is not initialized')
             )
         })
 
         it('should fill in conversationId in the request if exists', async () => {
-            await chatSessionService.generateAssistantResponse(mockRequestParams)
+            await chatSessionService.getChatResponse(mockRequestParams)
             sinon.assert.calledOnce(codeWhispererStreamingClient.generateAssistantResponse)
             sinon.assert.match(
                 codeWhispererStreamingClient.generateAssistantResponse.firstCall.firstArg,
@@ -131,7 +131,7 @@ describe('Chat Session Service', () => {
 
             chatSessionService.conversationId = mockConversationId
 
-            await chatSessionService.generateAssistantResponse(mockRequestParams)
+            await chatSessionService.getChatResponse(mockRequestParams)
 
             const requestParamsWithConversationId = {
                 conversationState: {
@@ -177,7 +177,7 @@ describe('Chat Session Service', () => {
         })
 
         it('abortRequest() aborts request with AbortController', async () => {
-            await chatSessionService.generateAssistantResponse(mockRequestParams)
+            await chatSessionService.getChatResponse(mockRequestParams)
 
             chatSessionService.abortRequest()
 
@@ -185,7 +185,7 @@ describe('Chat Session Service', () => {
         })
 
         it('dispose() calls aborts outgoing requests', async () => {
-            await chatSessionService.generateAssistantResponse(mockRequestParams)
+            await chatSessionService.getChatResponse(mockRequestParams)
 
             chatSessionService.dispose()
 
@@ -193,7 +193,7 @@ describe('Chat Session Service', () => {
         })
 
         it('clear() resets conversation id and aborts outgoing request', async () => {
-            await chatSessionService.generateAssistantResponse(mockRequestParams)
+            await chatSessionService.getChatResponse(mockRequestParams)
             chatSessionService.conversationId = mockConversationId
 
             assert.strictEqual(chatSessionService.conversationId, mockConversationId)

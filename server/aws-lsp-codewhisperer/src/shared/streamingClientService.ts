@@ -27,6 +27,9 @@ export type SendMessageCommandOutput =
     | SendMessageCommandOutputCodeWhispererStreaming
     | SendMessageCommandOutputQDeveloperStreaming
 
+export type ChatCommandInput = SendMessageCommandInput | GenerateAssistantResponseCommandInputCodeWhispererStreaming
+export type ChatCommandOutput = SendMessageCommandOutput | GenerateAssistantResponseCommandOutputCodeWhispererStreaming
+
 export abstract class StreamingClientServiceBase {
     protected readonly region
     protected readonly endpoint
