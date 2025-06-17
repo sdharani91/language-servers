@@ -7,17 +7,18 @@ import * as crypto from 'crypto'
 import * as path from 'path'
 import {
     ChatTriggerType,
-    GenerateAssistantResponseCommandInput,
-    GenerateAssistantResponseCommandOutput,
-    SendMessageCommandInput,
-    SendMessageCommandInput as SendMessageCommandInputCodeWhispererStreaming,
-    SendMessageCommandOutput,
+    //GenerateAssistantResponseCommandInput,
+    //GenerateAssistantResponseCommandOutput,
+    //SendMessageCommandInput,
+    //SendMessageCommandInput as SendMessageCommandInputCodeWhispererStreaming,
+    //SendMessageCommandOutput,
     ToolResult,
     ToolResultContentBlock,
     ToolResultStatus,
     ToolUse,
     ToolUseEvent,
 } from '@aws/codewhisperer-streaming-client'
+import { ChatCommandInput, ChatCommandOutput } from '../../shared/streamingClientService'
 import {
     Button,
     Status,
@@ -101,6 +102,8 @@ import {
     AmazonQServicePendingProfileError,
     AmazonQServicePendingSigninError,
 } from '../../shared/amazonQServiceManager/errors'
+import { AmazonQIAMServiceManager } from '../../shared/amazonQServiceManager/AmazonQIAMServiceManager'
+import { AmazonQBaseServiceManager } from '../../shared/amazonQServiceManager/BaseAmazonQServiceManager'
 import { AmazonQTokenServiceManager } from '../../shared/amazonQServiceManager/AmazonQTokenServiceManager'
 import { AmazonQWorkspaceConfig } from '../../shared/amazonQServiceManager/configurationUtils'
 import { TabBarController } from './tabBarController'
@@ -191,7 +194,7 @@ export class AgenticChatController implements ChatHandlers {
     #triggerContext: AgenticChatTriggerContext
     #customizationArn?: string
     #telemetryService: TelemetryService
-    #serviceManager?: AmazonQTokenServiceManager
+    #serviceManager?: AmazonQBaseServiceManager
     #tabBarController: TabBarController
     #chatHistoryDb: ChatDatabase
     #additionalContextProvider: AdditionalContextProvider
@@ -227,7 +230,7 @@ export class AgenticChatController implements ChatHandlers {
         chatSessionManagementService: ChatSessionManagementService,
         features: Features,
         telemetryService: TelemetryService,
-        serviceManager?: AmazonQTokenServiceManager
+        serviceManager?: AmazonQBaseServiceManager
     ) {
         this.#features = features
         this.#chatSessionManagementService = chatSessionManagementService
@@ -653,9 +656,13 @@ export class AgenticChatController implements ChatHandlers {
         triggerContext: TriggerContext,
         additionalContext: AdditionalContentEntryAddition[],
         chatResultStream: AgenticChatResultStream
-    ): Promise<GenerateAssistantResponseCommandInput> {
+    ): Promise<ChatCommandInput> {
         this.#debug('Preparing request input')
-        const profileArn = AmazonQTokenServiceManager.getInstance().getActiveProfileArn()
+        // Get profileArn from the service manager if available
+        let profileArn = undefined
+        if (this.#serviceManager instanceof AmazonQTokenServiceManager) {
+            profileArn = this.#serviceManager.getActiveProfileArn()
+        }
         const requestInput = await this.#triggerContext.getChatParamsFromTrigger(
             params,
             triggerContext,
@@ -668,7 +675,6 @@ export class AgenticChatController implements ChatHandlers {
             additionalContext,
             session.modelId
         )
-
         return requestInput
     }
 
@@ -676,7 +682,7 @@ export class AgenticChatController implements ChatHandlers {
      * Runs the agent loop, making requests and processing tool uses until completion
      */
     async #runAgentLoop(
-        initialRequestInput: GenerateAssistantResponseCommandInput,
+        initialRequestInput: ChatCommandInput,
         session: ChatSessionService,
         metric: Metric<CombinedConversationEvent>,
         chatResultStream: AgenticChatResultStream,
@@ -737,19 +743,24 @@ export class AgenticChatController implements ChatHandlers {
             const loadingMessageId = `loading-${uuid()}`
             await chatResultStream.writeResultBlock({ ...loadingMessage, messageId: loadingMessageId })
 
+<<<<<<< HEAD
             this.#llmRequestStartTime = Date.now()
             // Phase 3: Request Execution
+=======
+            // Phase 3: Request Executionx
+>>>>>>> 68bd16db (feat: iam auth for agentic chat initial changes)
             // Note: these logs are very noisy, but contain information redacted on the backend.
-            this.#debug(`generateAssistantResponse Request: ${JSON.stringify(currentRequestInput, undefined, 2)}`)
-            const response = await session.generateAssistantResponse(currentRequestInput)
-
+            this.#debug(
+                `generateAssistantResponse/SendMessage Request: ${JSON.stringify(currentRequestInput, undefined, 2)}`
+            )
+            const response = await session.getChatResponse(currentRequestInput)
             if (response.$metadata.requestId) {
                 metric.mergeWith({
                     requestIds: [response.$metadata.requestId],
                 })
             }
             this.#features.logging.info(
-                `generateAssistantResponse ResponseMetadata: ${loggingUtils.formatObj(response.$metadata)}`
+                `generateAssistantResponse/SendMessage ResponseMetadata: ${loggingUtils.formatObj(response.$metadata)}`
             )
             await chatResultStream.removeResultBlock(loadingMessageId)
 
@@ -773,7 +784,7 @@ export class AgenticChatController implements ChatHandlers {
             shouldDisplayMessage = true
 
             // Phase 4: Response Processing
-            const result = await this.#processGenerateAssistantResponseResponseWithTimeout(
+            const result = await this.#processAgenticChatResponseWithTimeout(
                 response,
                 metric.mergeWith({
                     cwsprChatResponseCode: response.$metadata.httpStatusCode,
@@ -943,7 +954,8 @@ export class AgenticChatController implements ChatHandlers {
      * Returns the remaining character budget for chat history.
      * @param request
      */
-    truncateRequest(request: GenerateAssistantResponseCommandInput): number {
+    truncateRequest(request: ChatCommandInput): number {
+        // TODO: Confirm if this limit applies to SendMessage and rename this constant
         let remainingCharacterBudget = generateAssistantResponseInputLimit
         if (!request?.conversationState?.currentMessage?.userInputMessage) {
             return remainingCharacterBudget
@@ -2095,12 +2107,12 @@ export class AgenticChatController implements ChatHandlers {
      * Updates the request input with tool results for the next iteration
      */
     #updateRequestInputWithToolResults(
-        requestInput: GenerateAssistantResponseCommandInput,
+        requestInput: ChatCommandInput,
         toolResults: ToolResult[],
         content: string
-    ): GenerateAssistantResponseCommandInput {
+    ): ChatCommandInput {
         // Create a deep copy of the request input
-        const updatedRequestInput = JSON.parse(JSON.stringify(requestInput)) as GenerateAssistantResponseCommandInput
+        const updatedRequestInput = JSON.parse(JSON.stringify(requestInput)) as ChatCommandInput
 
         // Add tool results to the request
         updatedRequestInput.conversationState!.currentMessage!.userInputMessage!.userInputMessageContext!.toolResults =
@@ -2165,7 +2177,10 @@ export class AgenticChatController implements ChatHandlers {
         metric.setDimension('codewhispererCustomizationArn', this.#customizationArn)
         metric.setDimension('languageServerVersion', this.#features.runtime.serverInfo.version)
         metric.setDimension('enabled', session.pairProgrammingMode)
-        const profileArn = AmazonQTokenServiceManager.getInstance().getActiveProfileArn()
+        let profileArn = undefined
+        if (this.#serviceManager instanceof AmazonQTokenServiceManager) {
+            profileArn = this.#serviceManager.getActiveProfileArn()
+        }
         if (profileArn) {
             this.#telemetryService.updateProfileArn(profileArn)
         }
@@ -2337,8 +2352,8 @@ export class AgenticChatController implements ChatHandlers {
         })
         const triggerContext = await this.#getInlineChatTriggerContext(params)
 
-        let response: SendMessageCommandOutput
-        let requestInput: SendMessageCommandInput
+        let response: ChatCommandOutput
+        let requestInput: ChatCommandInput
 
         try {
             requestInput = await this.#triggerContext.getChatParamsFromTrigger(
@@ -2353,7 +2368,7 @@ export class AgenticChatController implements ChatHandlers {
             }
 
             const client = this.#serviceManager.getStreamingClient()
-            response = await client.sendMessage(requestInput as SendMessageCommandInputCodeWhispererStreaming)
+            response = await client.sendMessage(requestInput as SendMessageCommandInput)
             this.#log('Response for inline chat', JSON.stringify(response.$metadata), JSON.stringify(response))
         } catch (err) {
             if (err instanceof AmazonQServicePendingSigninError || err instanceof AmazonQServicePendingProfileError) {
@@ -2414,7 +2429,6 @@ export class AgenticChatController implements ChatHandlers {
             this.#log(
                 `Q Chat server failed to insert code.Missing required parameters for insert code: ${missingParams.join(', ')}`
             )
-
             return
         }
 
@@ -2816,19 +2830,20 @@ export class AgenticChatController implements ChatHandlers {
         } else if (mode === 'freetier-limit' && mode !== this.#paidTierMode) {
             this.showFreeTierLimitMsgOnClient(tabId)
         } else if (!mode) {
-            // Note: intentionally async.
-            AmazonQTokenServiceManager.getInstance()
-                .getCodewhispererService()
-                .getSubscriptionStatus(true)
-                .then(o => {
-                    this.#log(`setPaidTierMode: getSubscriptionStatus: ${o.status} ${o.encodedVerificationUrl}`)
-                    this.setPaidTierMode(tabId, o.status !== 'none' ? 'paidtier' : 'freetier')
-                })
-                .catch(err => {
-                    this.#log(`setPaidTierMode: getSubscriptionStatus failed: ${JSON.stringify(err)}`)
-                })
-            // mode = isFreeTierUser ? 'freetier' : 'paidtier'
-
+            if (this.#serviceManager instanceof AmazonQTokenServiceManager) {
+                // Note: intentionally async.
+                this.#serviceManager
+                    .getCodewhispererService()
+                    .getSubscriptionStatus(true)
+                    .then(o => {
+                        this.#log(`setPaidTierMode: getSubscriptionStatus: ${o.status} ${o.encodedVerificationUrl}`)
+                        this.setPaidTierMode(tabId, o.status !== 'none' ? 'paidtier' : 'freetier')
+                    })
+                    .catch(err => {
+                        this.#log(`setPaidTierMode: getSubscriptionStatus failed: ${JSON.stringify(err)}`)
+                    })
+                // mode = isFreeTierUser ? 'freetier' : 'paidtier'
+            }
             return
         }
 
@@ -2864,8 +2879,11 @@ export class AgenticChatController implements ChatHandlers {
      * @returns `undefined` on success, or error message on failure.
      */
     async onManageSubscription(tabId: string, awsAccountId?: string): Promise<string | undefined> {
-        const client = AmazonQTokenServiceManager.getInstance().getCodewhispererService()
-
+        // Do nothing in case of IAM auth mode.
+        if (this.#serviceManager instanceof AmazonQIAMServiceManager) {
+            return
+        }
+        const client = this.#serviceManager?.getCodewhispererService()
         if (!awsAccountId) {
             // If no awsAccountId was provided:
             // 1. Check if the user is subscribed.
@@ -2990,8 +3008,8 @@ export class AgenticChatController implements ChatHandlers {
         }
     }
 
-    async #processGenerateAssistantResponseResponseWithTimeout(
-        response: GenerateAssistantResponseCommandOutput,
+    async #processAgenticChatResponseWithTimeout(
+        response: ChatCommandOutput,
         metric: Metric<AddMessageEvent>,
         chatResultStream: AgenticChatResultStream,
         session: ChatSessionService,
@@ -3011,7 +3029,7 @@ export class AgenticChatController implements ChatHandlers {
             }, responseTimeoutMs)
         })
         const streamWriter = chatResultStream.getResultStreamWriter()
-        const processResponsePromise = this.#processGenerateAssistantResponseResponse(
+        const processResponsePromise = this.#processAgenticChatResponse(
             response,
             metric,
             chatResultStream,
@@ -3089,8 +3107,8 @@ export class AgenticChatController implements ChatHandlers {
         }
     }
 
-    async #processGenerateAssistantResponseResponse(
-        response: GenerateAssistantResponseCommandOutput,
+    async #processAgenticChatResponse(
+        response: ChatCommandOutput,
         metric: Metric<AddMessageEvent>,
         chatResultStream: AgenticChatResultStream,
         streamWriter: ResultStreamWriter,
@@ -3107,13 +3125,14 @@ export class AgenticChatController implements ChatHandlers {
             await streamWriter.write({ body: '', contextList })
             session.contextListSent = true
         }
-
         const toolUseStartTimes: Record<string, number> = {}
         const toolUseLoadingTimeouts: Record<string, NodeJS.Timeout> = {}
-        for await (const chatEvent of response.generateAssistantResponseResponse!) {
+        for await (const chatEvent of response.generateAssistantResponseResponse! || response.sendMessageResponse!) {
             if (abortSignal?.aborted) {
                 throw new Error('Operation was aborted')
             }
+            // assistantResponseEvent is present in ChatResponseStream - used by both SendMessage and GenerateAssistantResponse
+            // https://code.amazon.com/packages/AWSVectorConsolasPlatformModel/blobs/mainline/--/model/types/conversation_types.smithy
             if (chatEvent.assistantResponseEvent) {
                 await this.#showUndoAllIfRequired(chatResultStream, session)
             }

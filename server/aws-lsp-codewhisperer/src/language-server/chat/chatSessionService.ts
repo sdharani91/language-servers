@@ -9,6 +9,9 @@ import {
     StreamingClientServiceToken,
     SendMessageCommandInput,
     SendMessageCommandOutput,
+    StreamingClientServiceIAM,
+    ChatCommandInput,
+    ChatCommandOutput,
 } from '../../shared/streamingClientService'
 import { ChatResult } from '@aws/language-server-runtimes/server-interface'
 import { AgenticChatError, isInputTooLongError, isRequestAbortedError, wrapErrorWithCode } from '../agenticChat/errors'
@@ -138,9 +141,7 @@ export class ChatSessionService {
         return response
     }
 
-    public async generateAssistantResponse(
-        request: GenerateAssistantResponseCommandInput
-    ): Promise<GenerateAssistantResponseCommandOutput> {
+    public async getChatResponse(request: ChatCommandInput): Promise<ChatCommandOutput> {
         this.#abortController = new AbortController()
 
         if (this.#conversationId && request.conversationState) {
@@ -160,6 +161,51 @@ export class ChatSessionService {
                 // Log the error using the logging property if available, otherwise fall back to console.error
                 if (this.#logging) {
                     this.#logging.error(`Error in generateAssistantResponse: ${loggingUtils.formatErr(e)}`)
+                }
+
+                const requestId = getRequestID(e)
+                if (isUsageLimitError(e)) {
+                    throw new AgenticChatError(
+                        'Request aborted',
+                        'AmazonQUsageLimitError',
+                        e instanceof Error ? e : undefined,
+                        requestId
+                    )
+                }
+                if (isRequestAbortedError(e)) {
+                    throw new AgenticChatError(
+                        'Request aborted',
+                        'RequestAborted',
+                        e instanceof Error ? e : undefined,
+                        requestId
+                    )
+                }
+                if (isInputTooLongError(e)) {
+                    throw new AgenticChatError(
+                        'Too much context loaded. I have cleared the conversation history. Please retry your request with smaller input.',
+                        'InputTooLong',
+                        e instanceof Error ? e : undefined,
+                        requestId
+                    )
+                }
+                let error = wrapErrorWithCode(e, 'QModelResponse')
+                if (
+                    request.conversationState?.currentMessage?.userInputMessage?.modelId !== undefined &&
+                    (error.cause as any)?.$metadata?.httpStatusCode === 500 &&
+                    error.message ===
+                        'Encountered unexpectedly high load when processing the request, please try again.'
+                ) {
+                    error.message = `The model you selected is temporarily unavailable. Please switch to a different model and try again.`
+                }
+                throw error
+            }
+        } else if (client instanceof StreamingClientServiceIAM) {
+            try {
+                return await client.sendMessage(request, this.#abortController)
+            } catch (e) {
+                // Log the error using the logging property if available, otherwise fall back to console.error
+                if (this.#logging) {
+                    this.#logging.error(`Error in Send Message response: ${loggingUtils.formatErr(e)}`)
                 }
 
                 const requestId = getRequestID(e)
