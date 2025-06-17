@@ -41,6 +41,7 @@ import * as utils from '../chat/utils'
 import { DEFAULT_HELP_FOLLOW_UP_PROMPT, HELP_MESSAGE } from '../chat/constants'
 import { TelemetryService } from '../../shared/telemetry/telemetryService'
 import { AmazonQTokenServiceManager } from '../../shared/amazonQServiceManager/AmazonQTokenServiceManager'
+import { AmazonQIAMServiceManager } from '../../shared/amazonQServiceManager/AmazonQIAMServiceManager'
 import { TabBarController } from './tabBarController'
 import { getUserPromptsDirectory, promptFileExtension } from './context/contextUtils'
 import { AdditionalContextProvider } from './context/addtionalContextProvider'
@@ -2587,6 +2588,98 @@ ${' '.repeat(8)}}
             sinon.assert.called(setModelIdStub)
 
             setModelIdStub.restore()
+        })
+    })
+
+    describe('IAM Authentication', () => {
+        let iamServiceManager: AmazonQIAMServiceManager
+        let iamChatController: AgenticChatController
+        let iamChatSessionManagementService: ChatSessionManagementService
+
+        beforeEach(() => {
+            // Reset the singleton instance
+            ChatSessionManagementService.reset()
+
+            // Create IAM service manager
+            AmazonQIAMServiceManager.resetInstance()
+            iamServiceManager = AmazonQIAMServiceManager.initInstance(testFeatures)
+
+            // Create chat session management service with IAM service manager
+            iamChatSessionManagementService = ChatSessionManagementService.getInstance()
+            iamChatSessionManagementService.withAmazonQServiceManager(iamServiceManager)
+
+            // Create controller with IAM service manager
+            iamChatController = new AgenticChatController(
+                iamChatSessionManagementService,
+                testFeatures,
+                telemetryService,
+                iamServiceManager
+            )
+        })
+
+        afterEach(() => {
+            iamChatController.dispose()
+            ChatSessionManagementService.reset()
+        })
+
+        it('creates a session with IAM service manager', () => {
+            iamChatController.onTabAdd({ tabId: mockTabId })
+
+            const sessionResult = iamChatSessionManagementService.getSession(mockTabId)
+            sinon.assert.match(sessionResult, {
+                success: true,
+                data: sinon.match.instanceOf(ChatSessionService),
+            })
+        })
+
+        it('uses sendMessage instead of generateAssistantResponse with IAM service manager', async () => {
+            // Create a session
+            iamChatController.onTabAdd({ tabId: mockTabId })
+
+            // Reset the sendMessage stub to track new calls
+            sendMessageStub.resetHistory()
+            generateAssistantResponseStub.resetHistory()
+
+            // Make a chat request
+            await iamChatController.onChatPrompt(
+                { tabId: mockTabId, prompt: { prompt: 'Hello' } },
+                mockCancellationToken
+            )
+
+            // Verify sendMessage was called and generateAssistantResponse was not
+            sinon.assert.called(sendMessageStub)
+            sinon.assert.notCalled(generateAssistantResponseStub)
+        })
+
+        it('sets source to Origin.IDE when using IAM service manager', async () => {
+            // Create a session
+            iamChatController.onTabAdd({ tabId: mockTabId })
+
+            // Reset the sendMessage stub to track new calls
+            sendMessageStub.resetHistory()
+
+            // Make a chat request
+            await iamChatController.onChatPrompt(
+                { tabId: mockTabId, prompt: { prompt: 'Hello' } },
+                mockCancellationToken
+            )
+
+            // Verify sendMessage was called with source set to IDE
+            sinon.assert.called(sendMessageStub)
+            const request = sendMessageStub.firstCall.args[0]
+            assert.strictEqual(request.source, 'IDE')
+        })
+
+        it('does not call onManageSubscription with IAM service manager', async () => {
+            // Create a spy on onManageSubscription
+            const onManageSubscriptionSpy = sinon.spy(iamChatController, 'onManageSubscription')
+
+            // Call onManageSubscription directly
+            await iamChatController.onManageSubscription('tabId')
+
+            // Verify the method returns early without doing anything
+            sinon.assert.calledOnce(onManageSubscriptionSpy)
+            assert.strictEqual(onManageSubscriptionSpy.returnValues[0], undefined)
         })
     })
 })
