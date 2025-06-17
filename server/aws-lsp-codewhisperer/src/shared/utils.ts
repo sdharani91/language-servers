@@ -4,7 +4,7 @@ import {
     CredentialsProvider,
     Position,
 } from '@aws/language-server-runtimes/server-interface'
-import { AWSError } from 'aws-sdk'
+import { AWSError, Credentials } from 'aws-sdk'
 import { distance } from 'fastest-levenshtein'
 import { Suggestion } from './codeWhispererService'
 import { CodewhispererCompletionType } from './telemetry/types'
@@ -351,6 +351,30 @@ export function getBearerTokenFromProvider(credentialsProvider: CredentialsProvi
     }
 
     return credentials.token
+}
+
+export function getIAMCredentialsFromProvider(credentialsProvider: CredentialsProvider) {
+    if (!credentialsProvider.hasCredentials('iam')) {
+        throw new Error('Missing IAM creds')
+    }
+
+    const credentials = credentialsProvider.getCredentials('iam') as Credentials
+    const newCredentials = {
+        credentials: {
+            accessKeyId: credentials.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey,
+        },
+    }
+    /*if (!credentials.access_token) {
+        throw new Error(MISSING_BEARER_TOKEN_ERROR)
+    }*/
+
+    //return newCredentials
+    return {
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        sessionToken: credentials.sessionToken,
+    }
 }
 
 export const flattenMetric = (obj: any, prefix = '') => {

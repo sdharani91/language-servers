@@ -163,9 +163,14 @@ function createSelectProfileCommand(languageClient: LanguageClient, encrypted: b
         // PROOF OF CONCEPT
         // We will resolve the default profile from the local system.
         // In a product, the host extension would know which profile it is configured to provide to the language server.
-        const awsCredentials = await fromIni({
+        /*const awsCredentials = await fromIni({
             profile: profileName,
-        })()
+        })()*/
+        const awsCredentials = {
+            accessKeyId: '',
+            secretAccessKey: '',
+            sessionToken: '',
+        }
 
         const request = await createUpdateIamCredentialsRequest(awsCredentials, encrypted)
         await sendIamCredentialsUpdate(request, languageClient)

@@ -34,6 +34,7 @@
         "package": "npm run compile && npm run package --workspaces --if-present"
     },
     "dependencies": {
+        "@amzn/amazon-q-developer-streaming-client": "file:core/q-developer-streaming-client/amzn-amazon-q-developer-streaming-client-1.0.0.tgz",
         "@aws/language-server-runtimes": "^0.2.97",
         "@smithy/types": "4.2.0",
         "typescript": "^5.8.2"

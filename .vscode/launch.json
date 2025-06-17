@@ -24,7 +24,7 @@
             "env": {
                 "LSP_SERVER": "${workspaceFolder}/app/aws-lsp-buildspec-runtimes/out/index.js"
             },
-            "preLaunchTask": "compile"
+            "preLaunchTask": "watch"
         },
         {
             "name": "CloudFormation Server",
@@ -122,6 +122,31 @@
                 // "AWS_CA_BUNDLE": "/path/to/cert.pem"
             }
             // "preLaunchTask": "compile"
+        },
+        {
+            "name": "CodeWhisperer Agentic Server IAM",
+            "type": "extensionHost",
+            "request": "launch",
+            "runtimeExecutable": "${execPath}",
+            "args": ["--extensionDevelopmentPath=${workspaceFolder}/client/vscode", "--disable-extensions"],
+            //"outFiles": ["${workspaceFolder}/client/vscode/out/**/*.js"],
+            "outFiles": ["${workspaceFolder}/**/out/**/*.js"],
+            "env": {
+                "LSP_SERVER": "${workspaceFolder}/app/aws-lsp-codewhisperer-runtimes/out/agent-iam-standalone.js",
+                "ENABLE_INLINE_COMPLETION": "true",
+                "ENABLE_ENCRYPTION": "false",
+                "ENABLE_IAM_PROVIDER": "true",
+                "ENABLE_CUSTOM_COMMANDS": "true",
+                "ENABLE_CHAT": "true",
+                "ENABLE_CUSTOMIZATIONS": "false",
+                "ENABLE_AMAZON_Q_PROFILES": "false",
+                "ENABLE_AWS_Q_SECTION": "true",
+                "ENABLE_AGENTIC_UI_MODE": "false",
+                "ENABLE_MODEL_SELECTION": "false"
+                // "HTTPS_PROXY": "http://127.0.0.1:8888",
+                // "AWS_CA_BUNDLE": "/path/to/cert.pem"
+            },
+            "preLaunchTask": "watch"
         },
         {
             "name": "CodeWhisperer Server IAM",
@@ -230,7 +255,7 @@
     "compounds": [
         {
             "name": "Launch as VSCode Extension + Debugging",
-            "configurations": ["CodeWhisperer Agentic Server Token", "Attach to AWS Documents Language Server"]
+            "configurations": ["CodeWhisperer Agentic Server IAM", "Attach to AWS Documents Language Server"]
         }
     ]
 }

@@ -13,7 +13,7 @@ import {
     SendMessageCommandOutput as SendMessageCommandOutputQDeveloperStreaming,
 } from '@amzn/amazon-q-developer-streaming-client'
 import { CredentialsProvider, SDKInitializator, Logging } from '@aws/language-server-runtimes/server-interface'
-import { getBearerTokenFromProvider, isUsageLimitError } from './utils'
+import { getBearerTokenFromProvider, getIAMCredentialsFromProvider, isUsageLimitError } from './utils'
 import { ConfiguredRetryStrategy } from '@aws-sdk/util-retry'
 import { CredentialProviderChain, Credentials } from 'aws-sdk'
 import { clientTimeoutMs } from '../language-server/agenticChat/constants'
@@ -26,6 +26,9 @@ export type SendMessageCommandInput =
 export type SendMessageCommandOutput =
     | SendMessageCommandOutputCodeWhispererStreaming
     | SendMessageCommandOutputQDeveloperStreaming
+
+export type ChatCommandInput = SendMessageCommandInput | GenerateAssistantResponseCommandInputCodeWhispererStreaming
+export type ChatCommandOutput = SendMessageCommandOutput | GenerateAssistantResponseCommandOutputCodeWhispererStreaming
 
 export abstract class StreamingClientServiceBase {
     protected readonly region
@@ -170,12 +173,22 @@ export class StreamingClientServiceIAM extends StreamingClientServiceBase {
             `Passing client for class QDeveloperStreaming to sdkInitializator (v3) for additional setup (e.g. proxy)`
         )
 
+        const credsProvider = async () => {
+            const credentials = getIAMCredentialsFromProvider(credentialsProvider)
+            logging.log(`IAM credentials ${credentials}`)
+            // without setting expiration, the tokenProvider will only be called once
+            return {
+                credentials,
+                expiration: new Date(),
+            }
+        }
+        const credentials = getIAMCredentialsFromProvider(credentialsProvider)
+        logging.log('New log line!!!')
+        logging.log(`IAM credentials1 ${credentials}`)
         this.client = sdkInitializator(QDeveloperStreaming, {
             region: region,
             endpoint: endpoint,
-            credentialProvider: new CredentialProviderChain([
-                () => credentialsProvider.getCredentials('iam') as Credentials,
-            ]),
+            credentials: getIAMCredentialsFromProvider(credentialsProvider),
             retryStrategy: new ConfiguredRetryStrategy(0, (attempt: number) => 500 + attempt ** 10),
         })
     }
