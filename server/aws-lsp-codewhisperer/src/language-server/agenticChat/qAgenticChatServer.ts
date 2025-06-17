@@ -10,19 +10,22 @@ import { CLEAR_QUICK_ACTION, HELP_QUICK_ACTION } from '../chat/quickActions'
 import { TelemetryService } from '../../shared/telemetry/telemetryService'
 import { makeUserContextObject } from '../../shared/telemetryUtils'
 import { AmazonQTokenServiceManager } from '../../shared/amazonQServiceManager/AmazonQTokenServiceManager'
+import { AmazonQBaseServiceManager } from '../../shared/amazonQServiceManager/BaseAmazonQServiceManager'
+import { getOrThrowBaseTokenServiceManager } from '../../shared/amazonQServiceManager/AmazonQTokenServiceManager'
+import { getOrThrowBaseIAMServiceManager } from '../../shared/amazonQServiceManager/AmazonQIAMServiceManager'
 import { AmazonQWorkspaceConfig } from '../../shared/amazonQServiceManager/configurationUtils'
 import { TabBarController } from './tabBarController'
 import { AmazonQServiceInitializationError } from '../../shared/amazonQServiceManager/errors'
 import { safeGet } from '../../shared/utils'
 import { enabledMCP } from './tools/mcp/mcpUtils'
 
-export const QAgenticChatServer =
+export const QAgenticChatServerFactory =
     // prettier-ignore
-    (): Server => features => {
+    (serviceManager: () => AmazonQBaseServiceManager): Server => features => {
         const { chat, credentialsProvider, telemetry, logging, lsp, runtime, agent } = features
 
         // AmazonQTokenServiceManager and TelemetryService are initialized in `onInitialized` handler to make sure Language Server connection is started
-        let amazonQServiceManager: AmazonQTokenServiceManager
+        let amazonQServiceManager: AmazonQBaseServiceManager
         let telemetryService: TelemetryService
 
         let chatController: AgenticChatController
@@ -62,7 +65,8 @@ export const QAgenticChatServer =
 
         lsp.onInitialized(async () => {
             // Get initialized service manager and inject it to chatSessionManagementService to pass it down
-            amazonQServiceManager = AmazonQTokenServiceManager.getInstance()
+            //amazonQServiceManager = AmazonQTokenServiceManager.getInstance()
+            amazonQServiceManager = serviceManager()
             chatSessionManagementService =
                 ChatSessionManagementService.getInstance().withAmazonQServiceManager(amazonQServiceManager)
 
@@ -194,3 +198,7 @@ export const QAgenticChatServer =
             chatController?.dispose()
         }
     }
+
+export const QAgenticChatServerIAM = QAgenticChatServerFactory(getOrThrowBaseIAMServiceManager)
+// Keeping the name same for now to not make change in other places
+export const QAgenticChatServer = QAgenticChatServerFactory(getOrThrowBaseTokenServiceManager)
