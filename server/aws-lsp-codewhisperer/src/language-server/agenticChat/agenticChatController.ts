@@ -18,7 +18,12 @@ import {
     ToolUse,
     ToolUseEvent,
 } from '@aws/codewhisperer-streaming-client'
-import { ChatCommandInput, ChatCommandOutput } from '../../shared/streamingClientService'
+import {
+    SendMessageCommandInput,
+    SendMessageCommandOutput,
+    ChatCommandInput,
+    ChatCommandOutput,
+} from '../../shared/streamingClientService'
 import {
     Button,
     Status,
@@ -238,10 +243,12 @@ export class AgenticChatController implements ChatHandlers {
         this.#telemetryController = new ChatTelemetryController(features, telemetryService)
         this.#telemetryService = telemetryService
         this.#serviceManager = serviceManager
-        this.#serviceManager?.onRegionChange(region => {
-            // @ts-ignore
-            this.#features.chat.chatOptionsUpdate({ region })
-        })
+        if (this.#serviceManager instanceof AmazonQTokenServiceManager) {
+            this.#serviceManager.onRegionChange(region => {
+                // @ts-ignore
+                this.#features.chat.chatOptionsUpdate({ region })
+            })
+        }
         this.#chatHistoryDb = new ChatDatabase(features)
         this.#tabBarController = new TabBarController(
             features,
@@ -743,12 +750,8 @@ export class AgenticChatController implements ChatHandlers {
             const loadingMessageId = `loading-${uuid()}`
             await chatResultStream.writeResultBlock({ ...loadingMessage, messageId: loadingMessageId })
 
-<<<<<<< HEAD
             this.#llmRequestStartTime = Date.now()
             // Phase 3: Request Execution
-=======
-            // Phase 3: Request Executionx
->>>>>>> 68bd16db (feat: iam auth for agentic chat initial changes)
             // Note: these logs are very noisy, but contain information redacted on the backend.
             this.#debug(
                 `generateAssistantResponse/SendMessage Request: ${JSON.stringify(currentRequestInput, undefined, 2)}`
@@ -2883,7 +2886,7 @@ export class AgenticChatController implements ChatHandlers {
         if (this.#serviceManager instanceof AmazonQIAMServiceManager) {
             return
         }
-        const client = this.#serviceManager?.getCodewhispererService()
+        const client = AmazonQTokenServiceManager.getInstance().getCodewhispererService()
         if (!awsAccountId) {
             // If no awsAccountId was provided:
             // 1. Check if the user is subscribed.
@@ -3127,7 +3130,13 @@ export class AgenticChatController implements ChatHandlers {
         }
         const toolUseStartTimes: Record<string, number> = {}
         const toolUseLoadingTimeouts: Record<string, NodeJS.Timeout> = {}
-        for await (const chatEvent of response.generateAssistantResponseResponse! || response.sendMessageResponse!) {
+        let chatEventStream = undefined
+        if ('generateAssistantResponseResponse' in response) {
+            chatEventStream = response.generateAssistantResponseResponse
+        } else if ('sendMessageResponse' in response) {
+            chatEventStream = response.sendMessageResponse
+        }
+        for await (const chatEvent of chatEventStream!) {
             if (abortSignal?.aborted) {
                 throw new Error('Operation was aborted')
             }

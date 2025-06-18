@@ -13,7 +13,6 @@ import {
     ProgrammingLanguage,
     EnvState,
 } from '@aws/codewhisperer-streaming-client'
-import { SendMessageCommandInput } from '../../shared/streamingClientService'
 import {
     BedrockTools,
     ChatParams,
@@ -129,7 +128,7 @@ export class AgenticChatTriggerContext {
         const { prompt } = params
         const workspaceFolders = workspaceUtils.getWorkspaceFolderPaths(this.#workspace).slice(0, maxWorkspaceFolders)
         const defaultEditorState = { workspaceFolders }
-        const hasWorkspace = triggerContext.hasWorkspace
+        const hasWorkspace = 'context' in params ? params.context?.some(c => c.command === '@workspace') : false
 
         // prompt.prompt is what user typed in the input, should be sent to backend
         // prompt.escapedPrompt is HTML serialized string, which should only be used for UI.
