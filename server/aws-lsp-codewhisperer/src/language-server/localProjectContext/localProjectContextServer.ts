@@ -1,19 +1,16 @@
 import { InitializeParams, Server, TextDocumentSyncKind } from '@aws/language-server-runtimes/server-interface'
-import { getOrThrowBaseTokenServiceManager } from '../../shared/amazonQServiceManager/AmazonQTokenServiceManager'
+import { AmazonQTokenServiceManager } from '../../shared/amazonQServiceManager/AmazonQTokenServiceManager'
 import { TelemetryService } from '../../shared/telemetry/telemetryService'
 import { LocalProjectContextController } from '../../shared/localProjectContextController'
 import { languageByExtension } from '../../shared/languageDetection'
 import { AmazonQWorkspaceConfig } from '../../shared/amazonQServiceManager/configurationUtils'
 import { URI } from 'vscode-uri'
-import { AmazonQBaseServiceManager } from '../../shared/amazonQServiceManager/BaseAmazonQServiceManager'
-import { getOrThrowBaseIAMServiceManager } from '../../shared/amazonQServiceManager/AmazonQIAMServiceManager'
 
-export const LocalProjectContextServerFactory =
-    (serviceManager: () => AmazonQBaseServiceManager): Server =>
-    features => {
-        const { credentialsProvider, lsp, telemetry, logging, workspace } = features
+export const LocalProjectContextServer =
+    (): Server =>
+    ({ credentialsProvider, telemetry, logging, lsp, workspace }) => {
         let localProjectContextController: LocalProjectContextController
-        let amazonQServiceManager: AmazonQBaseServiceManager
+        let amazonQServiceManager: AmazonQTokenServiceManager
         let telemetryService: TelemetryService
 
         let localProjectContextEnabled: boolean = false
@@ -63,7 +60,7 @@ export const LocalProjectContextServerFactory =
 
         lsp.onInitialized(async () => {
             try {
-                amazonQServiceManager = serviceManager()
+                amazonQServiceManager = AmazonQTokenServiceManager.getInstance()
                 telemetryService = new TelemetryService(amazonQServiceManager, credentialsProvider, telemetry, logging)
 
                 await amazonQServiceManager.addDidChangeConfigurationListener(updateConfigurationHandler)
@@ -150,6 +147,3 @@ export const LocalProjectContextServerFactory =
             await localProjectContextController?.dispose()
         }
     }
-
-export const LocalProjectContextServerIAM = LocalProjectContextServerFactory(getOrThrowBaseIAMServiceManager)
-export const LocalProjectContextServer = LocalProjectContextServerFactory(getOrThrowBaseTokenServiceManager)

@@ -535,3 +535,7 @@ export function getFileExtensionName(filepath: string): string {
 
     return filepath.substring(filepath.lastIndexOf('.') + 1).toLowerCase()
 }
+
+export function isUsingIAMAuth(): boolean {
+    return process.env.USE_IAM_AUTH === 'true'
+}

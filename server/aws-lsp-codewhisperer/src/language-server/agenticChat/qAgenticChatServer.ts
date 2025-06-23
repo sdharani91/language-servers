@@ -16,12 +16,12 @@ import { getOrThrowBaseIAMServiceManager } from '../../shared/amazonQServiceMana
 import { AmazonQWorkspaceConfig } from '../../shared/amazonQServiceManager/configurationUtils'
 import { TabBarController } from './tabBarController'
 import { AmazonQServiceInitializationError } from '../../shared/amazonQServiceManager/errors'
-import { safeGet } from '../../shared/utils'
+import { isUsingIAMAuth, safeGet } from '../../shared/utils'
 import { enabledMCP } from './tools/mcp/mcpUtils'
 
-export const QAgenticChatServerFactory =
+export const QAgenticChatServer =
     // prettier-ignore
-    (serviceManager: () => AmazonQBaseServiceManager): Server => features => {
+    (): Server => features => {
         const { chat, credentialsProvider, telemetry, logging, lsp, runtime, agent } = features
 
         // AmazonQTokenServiceManager and TelemetryService are initialized in `onInitialized` handler to make sure Language Server connection is started
@@ -65,7 +65,8 @@ export const QAgenticChatServerFactory =
 
         lsp.onInitialized(async () => {
             // Get initialized service manager and inject it to chatSessionManagementService to pass it down
-            amazonQServiceManager = serviceManager()
+
+            amazonQServiceManager = isUsingIAMAuth() ? getOrThrowBaseIAMServiceManager() : getOrThrowBaseTokenServiceManager()
             chatSessionManagementService =
                 ChatSessionManagementService.getInstance().withAmazonQServiceManager(amazonQServiceManager)
 
@@ -217,7 +218,3 @@ export const QAgenticChatServerFactory =
             chatController?.dispose()
         }
     }
-
-export const QAgenticChatServerIAM = QAgenticChatServerFactory(getOrThrowBaseIAMServiceManager)
-// Keeping the name same for now to not make change in other places
-export const QAgenticChatServer = QAgenticChatServerFactory(getOrThrowBaseTokenServiceManager)
