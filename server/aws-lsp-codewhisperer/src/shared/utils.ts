@@ -17,6 +17,7 @@ import {
 } from './constants'
 import {
     CodeWhispererStreamingServiceException,
+    Origin,
     ServiceQuotaExceededException,
     ThrottlingException,
     ThrottlingExceptionReason,
@@ -386,6 +387,13 @@ export function getIAMCredentialsFromProvider(credentialsProvider: CredentialsPr
 
 export function isUsingIAMAuth(): boolean {
     return process.env.USE_IAM_AUTH === 'true'
+}
+
+export function getOriginFromClientInfo(clientName: string | undefined): Origin {
+    if (clientName?.startsWith('AmazonQ-For-SMUS-IDE')) {
+        return 'IDE' //TODO: Update this after client update
+    }
+    return 'IDE'
 }
 
 export const flattenMetric = (obj: any, prefix = '') => {

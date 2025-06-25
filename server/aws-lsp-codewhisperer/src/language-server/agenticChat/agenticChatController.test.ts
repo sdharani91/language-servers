@@ -61,6 +61,7 @@ import {
 import { McpManager } from './tools/mcp/mcpManager'
 import { AgenticChatResultStream } from './agenticChatResultStream'
 import { AgenticChatError } from './errors'
+import * as sharedUtils from '../../shared/utils'
 
 describe('AgenticChatController', () => {
     let mcpInstanceStub: sinon.SinonStub
@@ -2668,6 +2669,38 @@ ${' '.repeat(8)}}
             sinon.assert.called(sendMessageStub)
             const request = sendMessageStub.firstCall.args[0]
             assert.strictEqual(request.source, 'IDE')
+        })
+
+        it('passes origin parameter correctly to prepareRequestInput', async () => {
+            // Stub getOriginFromClientInfo to return a specific value
+            const getOriginFromClientInfoStub = sinon
+                .stub(sharedUtils, 'getOriginFromClientInfo')
+                .returns('MD_IDE' as any)
+
+            // Create a session
+            iamChatController.onTabAdd({ tabId: mockTabId })
+
+            // Reset the sendMessage stub to track new calls
+            sendMessageStub.resetHistory()
+
+            // Make a chat request
+            await iamChatController.onChatPrompt(
+                { tabId: mockTabId, prompt: { prompt: 'Hello' } },
+                mockCancellationToken
+            )
+
+            // Verify getOriginFromClientInfo was called
+            sinon.assert.calledOnce(getOriginFromClientInfoStub)
+
+            // Verify sendMessage was called
+            sinon.assert.called(sendMessageStub)
+            const request = sendMessageStub.firstCall.args[0]
+
+            // Verify the origin is correctly set in the request using the value from getOriginFromClientInfo
+            assert.strictEqual(request.conversationState?.currentMessage?.userInputMessage?.origin, 'MD_IDE')
+
+            // Restore the stub
+            getOriginFromClientInfoStub.restore()
         })
 
         it('does not call onManageSubscription with IAM service manager', async () => {
